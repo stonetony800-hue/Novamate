@@ -3,6 +3,7 @@ import logging
 import requests
 from flask import Flask, request
 import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL") 
+# Add your gambling bot's username without the '@' (e.g., my_gambling_bot)
+GAMBLING_BOT_USERNAME = os.environ.get("GAMBLING_BOT_USERNAME", "YourGamblingBot")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
@@ -33,7 +36,15 @@ def send_welcome(message):
         "🤖 **ยินดีต้อนรับสู่บอทผู้ช่วย AI!**\n\n"
         "ส่งคำถาม หัวข้อ หรือข้อความอะไรก็ได้มาให้ฉัน แล้วฉันจะสร้างคำตอบคุณภาพสูงให้คุณทันที"
     )
-    bot.reply_to(message, welcome_text, parse_mode='Markdown')
+    
+    # Create the inline keyboard button redirecting to your main gambling bot
+    markup = InlineKeyboardMarkup()
+    # Deep link to open the gambling bot directly
+    redirect_url = f"https://t.me/{GAMBLING_BOT_USERNAME}?start=from_ai_bot"
+    btn = InlineKeyboardButton(text="🎮 เข้าสู่ระบบเกม / Go to Games", url=redirect_url)
+    markup.add(btn)
+    
+    bot.reply_to(message, welcome_text, parse_mode='Markdown', reply_markup=markup)
 
 @bot.message_handler(func=lambda message: True)
 def handle_ai_request(message):
