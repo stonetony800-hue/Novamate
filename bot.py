@@ -1,99 +1,76 @@
-import os
 import logging
-import requests
-from flask import Flask, request
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import os
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+)
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# Token Initialization from Render Environment
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-AI_API_KEY = os.environ.get("AI_API_KEY")
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL") 
-# Add your gambling bot's username without the '@' (e.g., my_gambling_bot)
-GAMBLING_BOT_USERNAME = os.environ.get("GAMBLING_BOT_USERNAME", "YourGamblingBot")
+# Text Messages
+WELCOME_TEXT = (
+    "สวัสดี {user_name} ยินดีต้อนรับสู่ เว็บ UFANEXT ตรงจาก UFABET! 🎉\n\n"
+    "🧧💥 สมัครวันนี้รับเครดิตฟรี 300 บาท หรือฟรีสปิน 300 ครั้ง 💥🧧\n"
+    "🎰 คืนเงินเดิมพันทุกวัน!\n"
+    "❤️ แจ็คพอตแตกทุกชั่วโมง! 😮 คุณอาจเป็นคนต่อไป 🔥\n\n"
+    "🎁 ลุ้นโชคกับรางวัล LUCKY SPIN REWARDS !!\n"
+    "💥รับรางวัลเงินสด! 20,545,200 บาท ที่นี่!!💥\n"
+    "เราให้โบนัสต้อนรับ 1,500 บาท แก่คุณหากเข้าร่วมวันนี้!!\n\n"
+    "🎲 สมัครคลิ๊ก https://ufanext.cc/register/\n"
+    "📲 เว็บ UFANEXT https://ufanext.cc"
+)
 
-bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
-app = Flask(__name__)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the /start command."""
+    user = update.effective_user
+    # Get user's first name or fall back to full name / username
+    user_name = user.first_name if user.first_name else user.full_name
 
-@app.route(f"/{BOT_TOKEN}", methods=['POST'])
-def redirect_message():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '', 200
-    else:
-        return 'Forbidden', 403
+    # Create inline link buttons for a clean user experience
+    keyboard = [
+        [
+            InlineKeyboardButton("🎲 สมัครสมาชิก (Register)", url="https://ufanext.cc/register/"),
+        ],
+        [
+            InlineKeyboardButton("📲 เข้าสู่เว็บไซต์ (Website)", url="https://ufanext.cc"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    # Welcome message updated to Thai for local users
-    welcome_text = (
-        "🤖 **ยินดีต้อนรับสู่บอทผู้ช่วย AI!**\n\n"
-        "ส่งคำถาม หัวข้อ หรือข้อความอะไรก็ได้มาให้ฉัน แล้วฉันจะสร้างคำตอบคุณภาพสูงให้คุณทันที"
+    # Format the dynamic username in the Thai message
+    formatted_message = WELCOME_TEXT.format(user_name=user_name)
+
+    await update.message.reply_text(
+        text=formatted_message,
+        reply_markup=reply_markup,
+        disable_web_page_preview=False
     )
-    
-    # Create the inline keyboard button redirecting to your main gambling bot
-    markup = InlineKeyboardMarkup()
-    # Deep link to open the gambling bot directly
-    redirect_url = f"https://t.me/{GAMBLING_BOT_USERNAME}?start=from_ai_bot"
-    btn = InlineKeyboardButton(text="🎮 เข้าสู่ระบบเกม / Go to Games", url=redirect_url)
-    markup.add(btn)
-    
-    bot.reply_to(message, welcome_text, parse_mode='Markdown', reply_markup=markup)
 
-@bot.message_handler(func=lambda message: True)
-def handle_ai_request(message):
-    user_prompt = message.text
-    chat_id = message.chat.id
-    
-    bot.send_chat_action(chat_id, 'typing')
-    
-    # Direct internal API call
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={AI_API_KEY}"
-    payload = {
-        "contents": [{
-            "parts": [{"text": user_prompt}]
-        }],
-        # Updated system instruction to force Thai outputs and formatting
-        "systemInstruction": {
-            "parts": [{"text": "You are a helpful, concise AI Telegram assistant. You must always respond in fluent, natural Thai. Keep your responses engaging and format them neatly using Markdown."}]
-        },
-        "generationConfig": {
-            "maxOutputTokens": 800
-        }
-    }
-    
-    try:
-        # Utilizing standard requests to communicate directly
-        response = requests.post(api_url, json=payload, timeout=15)
-        response_data = response.json()
-        
-        # Extract the text from the response structure safely
-        ai_response = response_data['candidates'][0]['content']['parts'][0]['text']
-        bot.reply_to(message, ai_response, parse_mode='Markdown')
-        
-    except Exception as e:
-        logger.error(f"Error processing AI request: {e}")
-        bot.reply_to(message, "⚠️ ระบบขัดข้องชั่วคราว กรุณาลองส่งข้อความใหม่อีกครั้ง")
+def main() -> None:
+    """Start the bot."""
+    # Retrieves TOKEN from Environment Variables (Set on Render)
+    token = os.environ.get("BOT_TOKEN")
 
-@app.route('/')
-def index():
-    return "Bot status: Active", 200
+    if not token:
+        logger.error("No BOT_TOKEN found in environment variables!")
+        return
 
-def set_webhook():
-    if RENDER_EXTERNAL_URL and BOT_TOKEN:
-        webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{BOT_TOKEN}"
-        bot.remove_webhook()
-        success = bot.set_webhook(url=webhook_url)
-        if success:
-            logger.info(f"Webhook connected to: {webhook_url}")
+    # Build application
+    application = ApplicationBuilder().token(token).build()
 
-set_webhook()
+    # Register handlers
+    application.add_handler(CommandHandler("start", start))
+
+    # Run the bot (Long Polling)
+    logger.info("Bot is running...")
+    application.run_polling()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    main()
