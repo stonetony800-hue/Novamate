@@ -28,12 +28,11 @@ WELCOME_TEXT = (
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /start command."""
+    """Handles the /start command by sending the local image with formatted text and buttons."""
     user = update.effective_user
-    # Get user's first name or fall back to full name / username
     user_name = user.first_name if user.first_name else user.full_name
 
-    # Create inline link buttons for a clean user experience
+    # Create inline link buttons
     keyboard = [
         [
             InlineKeyboardButton("🎲 สมัครสมาชิก (Register)", url="https://ufanext.cc/register/"),
@@ -44,31 +43,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Format the dynamic username in the Thai message
+    # Insert user's name dynamically into the Thai promo text
     formatted_message = WELCOME_TEXT.format(user_name=user_name)
 
-    await update.message.reply_text(
-        text=formatted_message,
-        reply_markup=reply_markup,
-        disable_web_page_preview=False
-    )
+    image_path = "banner.jpg"
+
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as photo_file:
+            await update.message.reply_photo(
+                photo=photo_file,
+                caption=formatted_message,
+                reply_markup=reply_markup
+            )
+    else:
+        # Fallback to plain text if image file is missing
+        logger.warning(f"Image '{image_path}' not found. Sending text only.")
+        await update.message.reply_text(
+            text=formatted_message,
+            reply_markup=reply_markup
+        )
 
 def main() -> None:
     """Start the bot."""
-    # Retrieves TOKEN from Environment Variables (Set on Render)
     token = os.environ.get("BOT_TOKEN")
 
     if not token:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
 
-    # Build application
     application = ApplicationBuilder().token(token).build()
-
-    # Register handlers
     application.add_handler(CommandHandler("start", start))
 
-    # Run the bot (Long Polling)
     logger.info("Bot is running...")
     application.run_polling()
 
